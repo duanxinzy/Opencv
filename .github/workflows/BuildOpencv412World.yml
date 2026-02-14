@@ -1,0 +1,60 @@
+name: Build OpenCV 4.12.0 (World + DLL + MT)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-opencv:
+    runs-on: windows-2022
+    env:
+      OPENCV_VERSION: "4.12.0"
+      BUILD_DIR: "build"
+      INSTALL_DIR: "opencv_sdk"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Clone OpenCV & Contrib
+        shell: bash
+        run: |
+          git clone --depth 1 --branch ${{ env.OPENCV_VERSION }} https://github.com/opencv/opencv.git
+          git clone --depth 1 --branch ${{ env.OPENCV_VERSION }} https://github.com/opencv/opencv_contrib.git
+
+      - name: Configure CMake
+        shell: cmd
+        run: |
+          cmake -S opencv -B ${{ env.BUILD_DIR }} -G "Visual Studio 17 2022" -A x64 ^
+            -D CMAKE_SYSTEM_VERSION=10.0.22621.0 ^
+            -D OPENCV_EXTRA_MODULES_PATH=opencv_contrib/modules ^
+            -D CMAKE_INSTALL_PREFIX=${{ env.INSTALL_DIR }} ^
+            -D BUILD_opencv_world=ON ^
+            -D BUILD_SHARED_LIBS=ON ^
+            -D BUILD_WITH_STATIC_CRT=ON ^
+            -D OPENCV_GENERATE_SETUPVARS=OFF ^
+            -D BUILD_EXAMPLES=OFF ^
+            -D BUILD_TESTS=OFF ^
+            -D BUILD_PERF_TESTS=OFF ^
+            -D WITH_MSMF=ON ^
+            -D WITH_VULKAN=OFF
+
+      - name: Build & Install Release
+        shell: cmd
+        run: |
+          cmake --build ${{ env.BUILD_DIR }} --config Release --target install --parallel %NUMBER_OF_PROCESSORS%
+
+      - name: Build & Install Debug
+        shell: cmd
+        run: |
+          cmake --build ${{ env.BUILD_DIR }} --config Debug --target install --parallel %NUMBER_OF_PROCESSORS%
+
+      - name: Pack Artifacts
+        shell: pwsh
+        run: |
+          Compress-Archive -Path ${{ env.INSTALL_DIR }} -DestinationPath opencv-4.12.0-world-mt.zip
+
+      - name: Upload Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencv-4.12.0-windows-x64-world-mt
+          path: opencv-4.12.0-world-mt.zip
